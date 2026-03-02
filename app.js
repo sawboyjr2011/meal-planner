@@ -43,7 +43,6 @@ let usdaKey = localStorage.getItem(LS.usdaKey) || "";
 /* =============================
    INIT
 ============================= */
-document.addEventListener("DOMContentLoaded", init);
 
 function init(){
   // Ensure there is at least one profile
@@ -577,4 +576,10 @@ function bindBackupHandlers(){
     // reset input so you can re-import same file if needed
     e.target.value = "";
   });
+   
+// Safari-safe init (works even if DOMContentLoaded already fired)
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
 }
