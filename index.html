@@ -1,170 +1,474 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Meal Plan Builder</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="styles.css">
+  <meta name="theme-color" content="#0b0b0c" />
 </head>
 
 <body>
+  <header class="top">
+    <div class="title">
+      <h1>Meal Plan Builder</h1>
+      <div class="sub">Profiles • Planning • Recipes • iPad-first layout • saved on device</div>
+    </div>
 
-<header class="top">
-  <div class="title">
-    <h1>Meal Plan Builder</h1>
-    <div class="sub">Import • Filter • Build • Save locally</div>
-  </div>
-</header>
-
-<nav class="tabs">
-  <button class="tab active" data-tab="recipes">Recipes</button>
-</nav>
-
-<main class="wrap">
-
-<section class="tabPanel active" id="tab_recipes">
-
-  <div class="panelGrid">
-
-    <!-- IMPORT COLUMN -->
-    <section class="card">
-      <h2 class="mt0">Import Recipes</h2>
-
-      <div class="row2 mt10">
-        <div>
-          <label>Cuisine</label>
-          <select id="importArea">
-            <option>Indian</option>
-            <option>Mexican</option>
-            <option>Thai</option>
-            <option>Italian</option>
-            <option>Chinese</option>
-            <option>Japanese</option>
-            <option>Greek</option>
-            <option>French</option>
-          </select>
-        </div>
-        <div>
-          <label>Count</label>
-          <select id="importCount">
-            <option>10</option>
-            <option selected>25</option>
-            <option>50</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="split mt12">
-        <button class="primary" id="btnImport">Import Meals</button>
-      </div>
-
-      <div id="importStatus" class="hint mt10"></div>
-
-      <div class="divider mt16"></div>
-
-      <h2 class="mt16">Import Filters</h2>
-
-      <label class="check mt10">
-        <input type="checkbox" id="importUseProfile" checked>
-        Apply Profile Filters
+    <div class="actions">
+      <button id="btnBackup" title="Export all data (profiles, recipes, plans)">Export</button>
+      <label class="fileBtn" title="Import a backup JSON">
+        Import
+        <input id="fileImport" type="file" accept="application/json" hidden>
       </label>
+    </div>
+  </header>
 
-      <div class="row3 mt10">
-        <div>
-          <label>Protein Min</label>
-          <input id="i_pro_min" type="number" placeholder="0">
-        </div>
-        <div>
-          <label>Carbs Min</label>
-          <input id="i_car_min" type="number" placeholder="0">
-        </div>
-        <div>
-          <label>Fat Min</label>
-          <input id="i_fat_min" type="number" placeholder="0">
-        </div>
+  <nav class="tabs">
+    <button class="tab active" data-tab="profiles">Profiles</button>
+    <button class="tab" data-tab="planning">Meal Planning</button>
+    <button class="tab" data-tab="recipes">Recipes</button>
+  </nav>
+
+  <main class="wrap">
+
+    <!-- =========================
+         TAB: PROFILES
+    ========================== -->
+    <section class="tabPanel active" id="tab_profiles">
+      <div class="panelGrid">
+        <section class="card">
+          <div class="row2">
+            <div>
+              <h2 class="mt0">Profiles</h2>
+              <div class="hint">Add multiple client profiles. Switch profile to change filters + targets.</div>
+            </div>
+            <div class="rowBtn">
+              <button class="primary" id="btnNewProfile">New</button>
+              <button class="danger" id="btnDeleteProfile">Delete</button>
+            </div>
+          </div>
+
+          <label class="mt12">Active profile</label>
+          <select id="profileSelect"></select>
+
+          <div class="divider mt16"></div>
+
+          <h2 class="mt16">Profile details</h2>
+          <div class="row2">
+            <div>
+              <label>First name</label>
+              <input id="p_first" placeholder="Valerie">
+            </div>
+            <div>
+              <label>Last name</label>
+              <input id="p_last" placeholder="(optional)">
+            </div>
+          </div>
+
+          <label class="mt12">Notes</label>
+          <textarea id="p_notes" placeholder="Preferences, schedule, context..."></textarea>
+
+          <div class="divider mt16"></div>
+
+          <h2 class="mt16">Daily targets</h2>
+          <div class="row3">
+            <div><label>Calories</label><input id="p_t_cal" type="number" placeholder="1550"></div>
+            <div><label>Protein (g)</label><input id="p_t_pro" type="number" placeholder="115"></div>
+            <div><label>Carbs (g)</label><input id="p_t_car" type="number" placeholder="160"></div>
+          </div>
+          <div class="row3 mt8">
+            <div><label>Fat (g)</label><input id="p_t_fat" type="number" placeholder="52"></div>
+            <div><label>Sodium (mg)</label><input id="p_t_sod" type="number" placeholder="optional"></div>
+            <div><label>Fiber (g)</label><input id="p_t_fib" type="number" placeholder="optional"></div>
+          </div>
+          <div class="row3 mt8">
+            <div><label>Saturated fat (g)</label><input id="p_t_sat" type="number" placeholder="optional"></div>
+            <div><label>Sugar (g)</label><input id="p_t_sug" type="number" placeholder="optional"></div>
+            <div class="alignEnd"><button class="primary" id="btnSaveProfile">Save profile</button></div>
+          </div>
+
+          <div class="divider mt16"></div>
+
+          <h2 class="mt16">Dietary restrictions</h2>
+          <div class="hint">Used to filter imports + local recipes (best effort based on ingredient text).</div>
+
+          <div class="row2 mt8">
+            <label class="check"><input type="checkbox" id="p_r_dairyfree"> Dairy-free</label>
+            <label class="check"><input type="checkbox" id="p_r_glutenfree"> Gluten-free</label>
+            <label class="check"><input type="checkbox" id="p_r_nocheese"> No cheese</label>
+            <label class="check"><input type="checkbox" id="p_r_noonion"> No onion</label>
+            <label class="check"><input type="checkbox" id="p_r_nogarlic"> No garlic</label>
+            <label class="check"><input type="checkbox" id="p_r_nopork"> No pork</label>
+          </div>
+
+          <label class="mt12">Custom restrictions (one per line)</label>
+          <textarea id="p_r_custom" placeholder="e.g. no shrimp&#10;low spice&#10;no tomatoes"></textarea>
+
+          <div class="divider mt16"></div>
+
+          <h2 class="mt16">Food preferences</h2>
+          <div class="row2">
+            <div>
+              <label>Likes (comma separated)</label>
+              <input id="p_like" placeholder="chicken, rice bowls, spicy, thai">
+            </div>
+            <div>
+              <label>Dislikes (comma separated)</label>
+              <input id="p_dislike" placeholder="mushrooms, olives">
+            </div>
+          </div>
+
+          <div class="divider mt16"></div>
+
+          <h2 class="mt16">Cooking equipment</h2>
+          <div class="row2 mt8">
+            <label class="check"><input type="checkbox" id="p_eq_stove"> Stove / Pan</label>
+            <label class="check"><input type="checkbox" id="p_eq_oven"> Oven</label>
+            <label class="check"><input type="checkbox" id="p_eq_airfryer"> Air fryer</label>
+            <label class="check"><input type="checkbox" id="p_eq_microwave"> Microwave</label>
+            <label class="check"><input type="checkbox" id="p_eq_slowcooker"> Slow cooker</label>
+            <label class="check"><input type="checkbox" id="p_eq_blender"> Blender</label>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2 class="mt0">Profile summary</h2>
+          <div class="hint">This drives recipe filtering + planning targets.</div>
+
+          <div class="card inner mt12">
+            <h2 class="mt0">Active profile</h2>
+            <div id="profileSummary" class="mono"></div>
+          </div>
+
+          <div class="card inner mt12">
+            <h2 class="mt0">Autofill (USDA)</h2>
+            <div class="hint">Used to estimate nutrition for new/manual recipes.</div>
+
+            <label class="mt12">USDA FoodData Central API Key</label>
+            <input id="usdaKey" placeholder="paste USDA key here">
+            <div class="split mt10">
+              <button class="primary" id="saveUsdaKey">Save key</button>
+              <button id="testUsdaKey">Test key</button>
+            </div>
+            <div id="usdaStatus" class="hint mt10"></div>
+
+            <div class="divider mt16"></div>
+            <h2 class="mt16">Autofill settings</h2>
+            <label class="check"><input type="checkbox" id="autoFillOnSave" checked> Auto-calc nutrition when saving a new/manual recipe (best effort)</label>
+          </div>
+        </section>
       </div>
-
-      <div class="split mt12">
-        <button id="btnApplyImportFilters">Apply Import Filters</button>
-        <button id="btnSaveVisibleImports">Save Visible</button>
-        <button id="btnSaveAllImports">Save All</button>
-      </div>
-
-      <div class="divider mt16"></div>
-
-      <h2 class="mt16">Import Results</h2>
-      <div id="importResults" class="list mt10"></div>
     </section>
 
-    <!-- LOCAL LIBRARY COLUMN -->
-    <section class="card">
-      <h2 class="mt0">Local Library</h2>
+    <!-- =========================
+         TAB: MEAL PLANNING
+    ========================== -->
+    <section class="tabPanel" id="tab_planning">
+      <div class="panelGrid">
+        <section class="card">
+          <h2 class="mt0">Meal Plan (active profile)</h2>
+          <div class="hint">Pools + totals vs targets.</div>
 
-      <label class="check mt10">
-        <input type="checkbox" id="localUseProfile" checked>
-        Apply Profile Filters
-      </label>
+          <div class="card inner mt12">
+            <h2 class="mt0">Targets</h2>
+            <div id="planningTargets" class="mono"></div>
+          </div>
 
-      <label class="mt12">Search</label>
-      <input id="search" placeholder="Search by name, ingredient, tag">
+          <div class="card inner mt12">
+            <h2 class="mt0">Mode</h2>
+            <label class="check"><input type="checkbox" id="togglePickOne"> Pick-one mode</label>
+            <div class="hint mt8">Off = averages. On = selected totals.</div>
+          </div>
 
-      <div class="row3 mt10">
-        <div>
-          <label>Protein Min</label>
-          <input id="l_pro_min" type="number" placeholder="0">
-        </div>
-        <div>
-          <label>Carbs Min</label>
-          <input id="l_car_min" type="number" placeholder="0">
-        </div>
-        <div>
-          <label>Fat Min</label>
-          <input id="l_fat_min" type="number" placeholder="0">
-        </div>
+          <div class="card inner mt12">
+            <h2 class="mt0">Totals</h2>
+            <div id="planningTotals" class="mono"></div>
+          </div>
+
+          <div class="split mt12">
+            <button class="danger" id="btnClearPlan">Clear plan</button>
+            <button id="btnCopyPlan">Copy plan</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2 class="mt0">Meal categories</h2>
+          <div class="hint">Add multiple meals per category.</div>
+
+          <div class="card inner mt12">
+            <div class="row2">
+              <div>
+                <h2 class="mt0">Breakfast pool</h2>
+                <div id="avgBreakfast" class="hint"></div>
+              </div>
+              <div class="rowBtn"><button id="btnAddBreakfast">Add</button></div>
+            </div>
+            <div id="poolBreakfast" class="list mt10"></div>
+          </div>
+
+          <div class="card inner mt12">
+            <div class="row2">
+              <div>
+                <h2 class="mt0">Lunch pool</h2>
+                <div id="avgLunch" class="hint"></div>
+              </div>
+              <div class="rowBtn"><button id="btnAddLunch">Add</button></div>
+            </div>
+            <div id="poolLunch" class="list mt10"></div>
+          </div>
+
+          <div class="card inner mt12">
+            <div class="row2">
+              <div>
+                <h2 class="mt0">Dinner pool</h2>
+                <div id="avgDinner" class="hint"></div>
+              </div>
+              <div class="rowBtn"><button id="btnAddDinner">Add</button></div>
+            </div>
+            <div id="poolDinner" class="list mt10"></div>
+          </div>
+
+          <div class="card inner mt12">
+            <h2 class="mt0">Pick-one selections</h2>
+            <div class="row3 mt10">
+              <div><label>Breakfast</label><select id="pickBreakfast"></select></div>
+              <div><label>Lunch</label><select id="pickLunch"></select></div>
+              <div><label>Dinner</label><select id="pickDinner"></select></div>
+            </div>
+          </div>
+        </section>
       </div>
-
-      <div class="split mt12">
-        <button id="btnApplyLocalFilters">Apply Local Filters</button>
-        <button id="btnClearLocalFilters">Clear Filters</button>
-      </div>
-
-      <div class="divider mt16"></div>
-
-      <h2 class="mt16">Add Recipe</h2>
-
-      <label class="mt10">Recipe Name</label>
-      <input id="r_name" placeholder="Chicken Bowl">
-
-      <div class="row3 mt10">
-        <div><input id="r_cal" type="number" placeholder="Calories"></div>
-        <div><input id="r_pro" type="number" placeholder="Protein"></div>
-        <div><input id="r_car" type="number" placeholder="Carbs"></div>
-      </div>
-
-      <div class="row2 mt10">
-        <div><input id="r_fat" type="number" placeholder="Fat"></div>
-        <div>
-          <label>Ingredients</label>
-          <textarea id="r_ing" placeholder="1 cup rice&#10;200g chicken"></textarea>
-        </div>
-      </div>
-
-      <div class="split mt12">
-        <button class="primary" id="btnSaveRecipe">Save Recipe</button>
-      </div>
-
-      <div class="divider mt16"></div>
-
-      <h2 class="mt16">Recipes</h2>
-      <div id="recipes" class="list mt10"></div>
     </section>
 
-  </div>
+    <!-- =========================
+         TAB: RECIPES (FIXED LAYOUT)
+         LEFT = Import + Import Filters + Results
+         RIGHT TOP = Local Filters
+         RIGHT MID = Add/Edit
+         RIGHT BOTTOM = Local list
+    ========================== -->
+    <section class="tabPanel" id="tab_recipes">
+      <div class="panelGrid">
 
-</section>
+        <!-- LEFT COLUMN -->
+        <section class="card">
+          <h2 class="mt0">Import recipes</h2>
+          <div class="hint">Pull recipes, then filter + save into your local library.</div>
 
-</main>
+          <div class="card inner mt12">
+            <h2 class="mt0">MealDB import (cuisine)</h2>
 
-<script src="app.js"></script>
+            <div class="row2 mt10">
+              <div>
+                <label>Cuisine / Area</label>
+                <select id="importArea">
+                  <option value="Indian">Indian</option>
+                  <option value="Mexican">Mexican</option>
+                  <option value="Thai">Thai</option>
+                  <option value="Italian">Italian</option>
+                  <option value="Chinese">Chinese</option>
+                  <option value="Japanese">Japanese</option>
+                  <option value="American">American</option>
+                  <option value="Greek">Greek</option>
+                  <option value="French">French</option>
+                  <option value="Spanish">Spanish</option>
+                  <option value="Vietnamese">Vietnamese</option>
+                  <option value="Korean">Korean</option>
+                  <option value="Caribbean">Caribbean</option>
+                  <option value="Middle Eastern">Middle Eastern</option>
+                </select>
+              </div>
+
+              <div>
+                <label>How many</label>
+                <select id="importCount">
+                  <option value="10">10</option>
+                  <option value="25" selected>25</option>
+                  <option value="50">50</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="split mt10">
+              <button class="primary" id="btnImport">Import meals</button>
+              <button id="btnClearImportResults">Clear results</button>
+            </div>
+
+            <div id="importStatus" class="hint mt10"></div>
+          </div>
+
+          <div class="card inner mt12">
+            <h2 class="mt0">Import filters</h2>
+
+            <label class="check mt10">
+              <input type="checkbox" id="importUseProfile" checked>
+              Filter using active profile restrictions/preferences
+            </label>
+
+            <div class="divider mt16"></div>
+
+            <h2 class="mt16">Macro filters (import)</h2>
+            <div class="row3 mt10">
+              <div><label>Protein (min)</label><input id="i_pro_min" type="number" placeholder="0"></div>
+              <div><label>Protein (max)</label><input id="i_pro_max" type="number" placeholder="999"></div>
+              <div class="alignEnd"><button id="btnApplyImportFilters" class="primary">Apply</button></div>
+            </div>
+            <div class="row3 mt10">
+              <div><label>Carbs (min)</label><input id="i_car_min" type="number" placeholder="0"></div>
+              <div><label>Carbs (max)</label><input id="i_car_max" type="number" placeholder="999"></div>
+              <div></div>
+            </div>
+            <div class="row3 mt10">
+              <div><label>Fat (min)</label><input id="i_fat_min" type="number" placeholder="0"></div>
+              <div><label>Fat (max)</label><input id="i_fat_max" type="number" placeholder="999"></div>
+              <div></div>
+            </div>
+
+            <div class="split mt12">
+              <button id="btnSaveVisibleImports">Save visible to library</button>
+              <button id="btnSaveAllImports">Save all imported</button>
+            </div>
+          </div>
+
+          <div class="divider mt16"></div>
+
+          <h2 class="mt16">Import results</h2>
+          <div class="hint">Not saved until you click “Save…”.</div>
+          <div id="importResults" class="list mt10"></div>
+        </section>
+
+        <!-- RIGHT COLUMN -->
+        <section class="card">
+          <!-- LOCAL FILTERS AT TOP (this is what you asked for) -->
+          <div class="card inner">
+            <div class="row2">
+              <div>
+                <h2 class="mt0">Local recipe library filters</h2>
+                <div class="hint">These only affect your saved library (right side), not imports.</div>
+              </div>
+              <div class="rowBtn">
+                <button class="danger" id="btnWipeRecipes">Delete all</button>
+              </div>
+            </div>
+
+            <div class="row2 mt10">
+              <div>
+                <label>Search</label>
+                <input id="search" placeholder="name, ingredient, tag">
+              </div>
+              <div>
+                <label>Filter mode</label>
+                <select id="filterMode">
+                  <option value="hide" selected>Hide excluded</option>
+                  <option value="warn">Show but warn</option>
+                </select>
+              </div>
+            </div>
+
+            <label class="check mt10">
+              <input type="checkbox" id="localUseProfile" checked>
+              Filter local library using active profile restrictions/preferences
+            </label>
+
+            <div class="divider mt16"></div>
+
+            <h2 class="mt16">Macro filters (local)</h2>
+            <div class="row3 mt10">
+              <div><label>Protein (min)</label><input id="l_pro_min" type="number" placeholder="0"></div>
+              <div><label>Protein (max)</label><input id="l_pro_max" type="number" placeholder="999"></div>
+              <div class="alignEnd"><button id="btnApplyLocalFilters" class="primary">Apply</button></div>
+            </div>
+            <div class="row3 mt10">
+              <div><label>Carbs (min)</label><input id="l_car_min" type="number" placeholder="0"></div>
+              <div><label>Carbs (max)</label><input id="l_car_max" type="number" placeholder="999"></div>
+              <div></div>
+            </div>
+            <div class="row3 mt10">
+              <div><label>Fat (min)</label><input id="l_fat_min" type="number" placeholder="0"></div>
+              <div><label>Fat (max)</label><input id="l_fat_max" type="number" placeholder="999"></div>
+              <div></div>
+            </div>
+
+            <div class="split mt12">
+              <button id="btnClearLocalFilters">Clear local filters</button>
+            </div>
+
+            <div id="localFilterStatus" class="hint mt10"></div>
+          </div>
+
+          <!-- ADD/EDIT -->
+          <div class="card inner mt12">
+            <h2 class="mt0">Add / Edit recipe</h2>
+            <div class="hint">Manual recipes can be auto-calculated with USDA (if enabled).</div>
+
+            <input type="hidden" id="r_id">
+
+            <label class="mt10">Recipe name</label>
+            <input id="r_name" placeholder="Chicken bowl">
+
+            <div class="row2 mt10">
+              <div>
+                <label>Category</label>
+                <select id="r_category">
+                  <option value="breakfast">Breakfast</option>
+                  <option value="lunch">Lunch</option>
+                  <option value="dinner">Dinner</option>
+                  <option value="snack">Snack</option>
+                </select>
+              </div>
+              <div>
+                <label>Servings (yield)</label>
+                <input id="r_serv" type="number" step="0.5" value="1">
+              </div>
+            </div>
+
+            <h2 class="mt16">Nutrition per serving</h2>
+            <div class="row3 mt10">
+              <div><label>Calories</label><input id="r_cal" type="number" placeholder="0"></div>
+              <div><label>Protein (g)</label><input id="r_pro" type="number" step="0.1" placeholder="0"></div>
+              <div><label>Carbs (g)</label><input id="r_car" type="number" step="0.1" placeholder="0"></div>
+            </div>
+            <div class="row3 mt10">
+              <div><label>Fat (g)</label><input id="r_fat" type="number" step="0.1" placeholder="0"></div>
+              <div><label>Sodium (mg)</label><input id="r_sod" type="number" placeholder="0"></div>
+              <div><label>Fiber (g)</label><input id="r_fib" type="number" step="0.1" placeholder="0"></div>
+            </div>
+            <div class="row3 mt10">
+              <div><label>Sugar (g)</label><input id="r_sug" type="number" step="0.1" placeholder="0"></div>
+              <div><label>Sat fat (g)</label><input id="r_sat" type="number" step="0.1" placeholder="0"></div>
+              <div><label>Potassium (mg)</label><input id="r_pot" type="number" step="1" placeholder="0"></div>
+            </div>
+
+            <label class="mt12">Ingredients (one per line)</label>
+            <textarea id="r_ing" placeholder="200 g chicken breast&#10;1 cup cooked rice&#10;1 tbsp olive oil"></textarea>
+
+            <label class="mt12">Instructions</label>
+            <textarea id="r_steps" placeholder="optional"></textarea>
+
+            <label class="mt12">Tags (comma separated)</label>
+            <input id="r_tags" placeholder="meal prep, quick, mexican">
+
+            <div class="split mt12">
+              <button class="primary" id="btnSaveRecipe">Save recipe</button>
+              <button id="btnResetRecipe">Reset</button>
+              <button id="btnAutoCalcRecipe">Auto-calc now</button>
+            </div>
+
+            <div id="recipeCalcStatus" class="hint mt10"></div>
+          </div>
+
+          <!-- LOCAL LIST -->
+          <div class="divider mt16"></div>
+          <h2 class="mt16">Recipes</h2>
+          <div id="recipes" class="list mt10"></div>
+        </section>
+
+      </div>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
 </body>
 </html>
