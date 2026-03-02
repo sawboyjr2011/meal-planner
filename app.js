@@ -1,7 +1,8 @@
-/* app.js (v4.1)
-   Option 1: MealDB + USDA
-   Fixes:
-   - Tabs now work (event handlers attached after DOM ready)
+/* app.js (v4.2)
+   Option 1: MealDB + USDA (UI-first)
+   Fixes included:
+   - Safari-safe init (runs even if DOMContentLoaded already fired)
+   - Bulletproof tab switching with event delegation (Safari text-node safe)
    - Profile dropdown updates immediately after saving
 */
 
@@ -30,6 +31,11 @@ function load(key, fallback){
     return fallback;
   }
 }
+function escapeHTML(s){
+  return (s || "").replace(/[&<>"']/g, (c) => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[c]));
+}
 
 /* =============================
    STATE
@@ -43,7 +49,6 @@ let usdaKey = localStorage.getItem(LS.usdaKey) || "";
 /* =============================
    INIT
 ============================= */
-
 function init(){
   // Ensure there is at least one profile
   if(!profiles.length){
@@ -59,7 +64,7 @@ function init(){
   }
 
   // Bind UI handlers AFTER DOM exists
-  bindTabs();
+  bindTabs();              // (optional) direct bindings
   bindProfileHandlers();
   bindUSDAHandlers();
   bindRecipeHandlers();
@@ -67,7 +72,8 @@ function init(){
   bindBackupHandlers();
 
   // Hydrate fields
-  $("usdaKey").value = usdaKey;
+  const keyInput = $("usdaKey");
+  if (keyInput) keyInput.value = usdaKey;
 
   renderProfileSelect();
   loadActiveProfileIntoForm();
@@ -76,27 +82,33 @@ function init(){
   renderRecipes();
 }
 
+// Safari-safe init (works even if DOMContentLoaded already fired)
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
+}
+
 /* =============================
    TABS
 ============================= */
 function bindTabs(){
-  const tabButtons = document.querySelectorAll(".tab");
-  tabButtons.forEach(btn => {
+  // Direct listeners (nice to have, but the bulletproof handler below is the real guarantee)
+  document.querySelectorAll(".tab").forEach(btn => {
     btn.addEventListener("click", () => {
-      const tabName = btn.dataset.tab; // "profiles" | "planning" | "recipes"
-      setActiveTab(tabName);
+      const tabName = btn.dataset.tab;
+      if (tabName) setActiveTab(tabName);
     });
   });
 }
 
 function setActiveTab(tabName){
-  // buttons
   document.querySelectorAll(".tab").forEach(b => {
     b.classList.toggle("active", b.dataset.tab === tabName);
   });
-  // panels
+
   document.querySelectorAll(".tabPanel").forEach(p => p.classList.remove("active"));
-  const panel = $(`tab_${tabName}`);
+  const panel = document.getElementById(`tab_${tabName}`);
   if(panel) panel.classList.add("active");
 }
 
@@ -127,7 +139,7 @@ function persistProfiles(){
 }
 
 function bindProfileHandlers(){
-  $("btnNewProfile").addEventListener("click", () => {
+  $("btnNewProfile")?.addEventListener("click", () => {
     const p = createEmptyProfile();
     profiles.push(p);
     activeProfileId = p.id;
@@ -138,7 +150,7 @@ function bindProfileHandlers(){
     renderPlanning();
   });
 
-  $("btnDeleteProfile").addEventListener("click", () => {
+  $("btnDeleteProfile")?.addEventListener("click", () => {
     if(!confirm("Delete profile?")) return;
     profiles = profiles.filter(p => p.id !== activeProfileId);
     activeProfileId = profiles[0]?.id || null;
@@ -149,56 +161,56 @@ function bindProfileHandlers(){
     renderPlanning();
   });
 
-  $("btnSaveProfile").addEventListener("click", () => {
+  $("btnSaveProfile")?.addEventListener("click", () => {
     const p = getActiveProfile();
     if(!p) return;
 
-    p.first = $("p_first").value.trim();
-    p.last = $("p_last").value.trim();
-    p.notes = $("p_notes").value || "";
+    p.first = $("p_first")?.value.trim() || "";
+    p.last  = $("p_last")?.value.trim() || "";
+    p.notes = $("p_notes")?.value || "";
 
     p.targets = {
-      cal: $("p_t_cal").value,
-      pro: $("p_t_pro").value,
-      car: $("p_t_car").value,
-      fat: $("p_t_fat").value,
-      sod: $("p_t_sod").value,
-      fib: $("p_t_fib").value,
-      sat: $("p_t_sat").value,
-      sug: $("p_t_sug").value
+      cal: $("p_t_cal")?.value || "",
+      pro: $("p_t_pro")?.value || "",
+      car: $("p_t_car")?.value || "",
+      fat: $("p_t_fat")?.value || "",
+      sod: $("p_t_sod")?.value || "",
+      fib: $("p_t_fib")?.value || "",
+      sat: $("p_t_sat")?.value || "",
+      sug: $("p_t_sug")?.value || ""
     };
 
-    p.likes = ($("p_like").value || "")
+    p.likes = (($("p_like")?.value || ""))
       .split(",").map(s=>norm(s.trim())).filter(Boolean);
 
-    p.dislikes = ($("p_dislike").value || "")
+    p.dislikes = (($("p_dislike")?.value || ""))
       .split(",").map(s=>norm(s.trim())).filter(Boolean);
 
-    const custom = ($("p_r_custom").value || "")
+    const custom = (($("p_r_custom")?.value || ""))
       .split("\n").map(s=>norm(s.trim())).filter(Boolean);
 
     p.restrictions = [
-      $("p_r_dairyfree").checked && "dairy",
-      $("p_r_glutenfree").checked && "gluten",
-      $("p_r_nocheese").checked && "cheese",
-      $("p_r_noonion").checked && "onion",
-      $("p_r_nogarlic").checked && "garlic",
-      $("p_r_nopork").checked && "pork",
+      $("p_r_dairyfree")?.checked && "dairy",
+      $("p_r_glutenfree")?.checked && "gluten",
+      $("p_r_nocheese")?.checked && "cheese",
+      $("p_r_noonion")?.checked && "onion",
+      $("p_r_nogarlic")?.checked && "garlic",
+      $("p_r_nopork")?.checked && "pork",
       ...custom
     ].filter(Boolean);
 
     p.equipment = [
-      $("p_eq_stove").checked && "stove",
-      $("p_eq_oven").checked && "oven",
-      $("p_eq_airfryer").checked && "airfryer",
-      $("p_eq_microwave").checked && "microwave",
-      $("p_eq_slowcooker").checked && "slowcooker",
-      $("p_eq_blender").checked && "blender"
+      $("p_eq_stove")?.checked && "stove",
+      $("p_eq_oven")?.checked && "oven",
+      $("p_eq_airfryer")?.checked && "airfryer",
+      $("p_eq_microwave")?.checked && "microwave",
+      $("p_eq_slowcooker")?.checked && "slowcooker",
+      $("p_eq_blender")?.checked && "blender"
     ].filter(Boolean);
 
     persistProfiles();
 
-    // ✅ This fixes your “active profile name doesn’t update”
+    // ✅ fixes “active profile name doesn’t update”
     renderProfileSelect();
     renderProfileSummary();
     renderPlanning();
@@ -206,7 +218,7 @@ function bindProfileHandlers(){
     alert("Profile saved.");
   });
 
-  $("profileSelect").addEventListener("change", () => {
+  $("profileSelect")?.addEventListener("change", () => {
     activeProfileId = $("profileSelect").value;
     persistProfiles();
     loadActiveProfileIntoForm();
@@ -217,6 +229,8 @@ function bindProfileHandlers(){
 
 function renderProfileSelect(){
   const sel = $("profileSelect");
+  if (!sel) return;
+
   sel.innerHTML = "";
   profiles.forEach(p=>{
     const opt = document.createElement("option");
@@ -224,6 +238,7 @@ function renderProfileSelect(){
     opt.textContent = `${p.first || "Unnamed"}${p.last ? " " + p.last : ""}`;
     sel.appendChild(opt);
   });
+
   sel.value = activeProfileId || "";
 }
 
@@ -232,7 +247,7 @@ function loadActiveProfileIntoForm(){
   if(!p) return;
 
   $("p_first").value = p.first || "";
-  $("p_last").value = p.last || "";
+  $("p_last").value  = p.last || "";
   $("p_notes").value = p.notes || "";
 
   $("p_t_cal").value = p.targets?.cal || "";
@@ -247,7 +262,7 @@ function loadActiveProfileIntoForm(){
   $("p_like").value = (p.likes || []).join(", ");
   $("p_dislike").value = (p.dislikes || []).join(", ");
 
-  // Reset checkboxes
+  // Restrictions checkboxes
   const restr = new Set(p.restrictions || []);
   $("p_r_dairyfree").checked = restr.has("dairy");
   $("p_r_glutenfree").checked = restr.has("gluten");
@@ -256,12 +271,12 @@ function loadActiveProfileIntoForm(){
   $("p_r_nogarlic").checked = restr.has("garlic");
   $("p_r_nopork").checked = restr.has("pork");
 
-  // Put non-common restrictions into custom box
+  // Custom restrictions
   const common = new Set(["dairy","gluten","cheese","onion","garlic","pork"]);
   const custom = (p.restrictions || []).filter(r => !common.has(r));
   $("p_r_custom").value = custom.join("\n");
 
-  // Equipment
+  // Equipment checkboxes
   const eq = new Set(p.equipment || []);
   $("p_eq_stove").checked = eq.has("stove");
   $("p_eq_oven").checked = eq.has("oven");
@@ -274,35 +289,38 @@ function loadActiveProfileIntoForm(){
 function renderProfileSummary(){
   const p = getActiveProfile();
   if(!p) return;
-  $("profileSummary").innerHTML = `
-Name: ${p.first || "Unnamed"} ${p.last || ""}
+
+  const html = `
+Name: ${escapeHTML(p.first || "Unnamed")} ${escapeHTML(p.last || "")}
 
 Targets:
-- Calories: ${p.targets?.cal || "-"}
-- Protein: ${p.targets?.pro || "-"} g
-- Carbs: ${p.targets?.car || "-"} g
-- Fat: ${p.targets?.fat || "-"} g
-- Sodium: ${p.targets?.sod || "-"} mg
-- Fiber: ${p.targets?.fib || "-"} g
+- Calories: ${escapeHTML(p.targets?.cal || "-")}
+- Protein: ${escapeHTML(p.targets?.pro || "-")} g
+- Carbs: ${escapeHTML(p.targets?.car || "-")} g
+- Fat: ${escapeHTML(p.targets?.fat || "-")} g
+- Sodium: ${escapeHTML(p.targets?.sod || "-")} mg
+- Fiber: ${escapeHTML(p.targets?.fib || "-")} g
 
-Restrictions: ${(p.restrictions || []).join(", ") || "None"}
-Likes: ${(p.likes || []).join(", ") || "—"}
-Dislikes: ${(p.dislikes || []).join(", ") || "—"}
-Equipment: ${(p.equipment || []).join(", ") || "—"}
+Restrictions: ${escapeHTML((p.restrictions || []).join(", ") || "None")}
+Likes: ${escapeHTML((p.likes || []).join(", ") || "—")}
+Dislikes: ${escapeHTML((p.dislikes || []).join(", ") || "—")}
+Equipment: ${escapeHTML((p.equipment || []).join(", ") || "—")}
   `.trim().replaceAll("\n", "<br>");
+
+  $("profileSummary").innerHTML = html;
 }
 
 /* =============================
    USDA (key only for now)
 ============================= */
 function bindUSDAHandlers(){
-  $("saveUsdaKey").addEventListener("click", () => {
+  $("saveUsdaKey")?.addEventListener("click", () => {
     usdaKey = $("usdaKey").value.trim();
     localStorage.setItem(LS.usdaKey, usdaKey);
     $("usdaStatus").textContent = "Saved on this device.";
   });
 
-  $("testUsdaKey").addEventListener("click", async () => {
+  $("testUsdaKey")?.addEventListener("click", async () => {
     const k = (localStorage.getItem(LS.usdaKey) || "").trim();
     if(!k){ alert("Enter and Save your USDA key first."); return; }
 
@@ -322,10 +340,10 @@ function bindUSDAHandlers(){
 }
 
 /* =============================
-   RECIPES (basic list for now)
+   RECIPES (manual only for now)
 ============================= */
 function bindRecipeHandlers(){
-  $("btnSaveRecipe").addEventListener("click", () => {
+  $("btnSaveRecipe")?.addEventListener("click", () => {
     const id = $("r_id").value || uid();
     const recipe = {
       id,
@@ -361,11 +379,9 @@ function bindRecipeHandlers(){
     alert("Recipe saved.");
   });
 
-  $("btnResetRecipe").addEventListener("click", () => {
-    resetRecipeForm();
-  });
+  $("btnResetRecipe")?.addEventListener("click", resetRecipeForm);
 
-  $("btnWipeRecipes").addEventListener("click", () => {
+  $("btnWipeRecipes")?.addEventListener("click", () => {
     if(!confirm("Delete ALL recipes?")) return;
     recipes = [];
     save(LS.recipes, recipes);
@@ -373,10 +389,13 @@ function bindRecipeHandlers(){
     renderPlanning();
   });
 
-  // Placeholder: Auto-calc button will be wired later (USDA per-ingredient)
-  $("btnAutoCalcRecipe").addEventListener("click", () => {
+  // Placeholder for USDA calc (next step)
+  $("btnAutoCalcRecipe")?.addEventListener("click", () => {
     alert("Auto-calc nutrition is coming next (USDA ingredient analysis). UI is stable now.");
   });
+
+  $("search")?.addEventListener("input", renderRecipes);
+  $("filterMode")?.addEventListener("change", renderRecipes);
 }
 
 function resetRecipeForm(){
@@ -401,61 +420,104 @@ function resetRecipeForm(){
   $("recipeCalcStatus").textContent = "";
 }
 
+function recipeMatchesProfile(recipe, profile){
+  // simple best-effort: if ingredient list contains a restriction/dislike term
+  const mode = $("filterMode")?.value || "hide";
+  const terms = [
+    ...(profile?.restrictions || []),
+    ...(profile?.dislikes || [])
+  ].map(norm).filter(Boolean);
+
+  if(!terms.length) return { ok:true, warn:false };
+
+  const hay = (recipe.ingredients || []).join("\n").toLowerCase() + " " + (recipe.tags || []).join(" ").toLowerCase();
+
+  const hit = terms.some(t => t && hay.includes(t));
+  if(!hit) return { ok:true, warn:false };
+
+  if(mode === "hide") return { ok:false, warn:false };
+  return { ok:true, warn:true };
+}
+
 function renderRecipes(){
   const list = $("recipes");
+  if(!list) return;
+
+  const q = norm($("search")?.value || "");
+  const p = getActiveProfile();
+
   list.innerHTML = "";
 
-  if(!recipes.length){
-    list.innerHTML = `<div class="hint">No recipes yet. Add a manual recipe or import later.</div>`;
+  let shown = recipes.slice();
+
+  if(q){
+    shown = shown.filter(r => {
+      const hay = (r.name || "").toLowerCase() + " " +
+        (r.tags || []).join(" ").toLowerCase() + " " +
+        (r.ingredients || []).join(" ").toLowerCase();
+      return hay.includes(q);
+    });
+  }
+
+  const rendered = [];
+  shown.forEach(r => {
+    const { ok, warn } = recipeMatchesProfile(r, p);
+    if(!ok) return;
+
+    rendered.push({ r, warn });
+  });
+
+  if(!rendered.length){
+    list.innerHTML = `<div class="hint">No recipes yet (or hidden by filters).</div>`;
     return;
   }
 
-  recipes.forEach(r=>{
+  rendered.forEach(({r, warn})=>{
     const div = document.createElement("div");
     div.className = "item";
     div.innerHTML = `
-      <h3>${escapeHTML(r.name)}</h3>
+      <h3>${escapeHTML(r.name)} ${warn ? `<span class="warn">(check profile)</span>` : ""}</h3>
       <div class="meta">
         <span>${num(r.cal).toFixed(0)} cal</span>
         <span>${num(r.pro).toFixed(1)}P</span>
         <span>${num(r.car).toFixed(1)}C</span>
         <span>${num(r.fat).toFixed(1)}F</span>
       </div>
+      <div class="hint mt8">Category: ${escapeHTML(r.category || "-")} • Tags: ${escapeHTML((r.tags||[]).join(", ") || "—")}</div>
     `;
     list.appendChild(div);
   });
-}
-
-function escapeHTML(s){
-  return (s || "").replace(/[&<>"']/g, (c) => ({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
-  }[c]));
 }
 
 /* =============================
    MEAL PLANNING (basic totals)
 ============================= */
 function bindPlanningHandlers(){
-  $("btnClearPlan").addEventListener("click", () => {
+  $("btnClearPlan")?.addEventListener("click", () => {
     plan = { breakfast: [], lunch: [], dinner: [] };
     save(LS.plan, plan);
     renderPlanning();
   });
 
-  $("btnCopyPlan").addEventListener("click", async () => {
+  $("btnCopyPlan")?.addEventListener("click", async () => {
     const text = buildPlanText();
     try{
       await navigator.clipboard.writeText(text);
       alert("Plan copied.");
     }catch{
-      alert("Copy failed. (iOS sometimes blocks clipboard.)");
+      alert("Copy failed. (Safari/iOS sometimes blocks clipboard.)");
     }
   });
 
-  // Pick-one toggle exists in UI; full logic comes after pools are implemented
-  $("togglePickOne").addEventListener("change", () => {
+  $("togglePickOne")?.addEventListener("change", () => {
     renderPlanning();
   });
+
+  // pool add buttons are wired next step (after recipes list supports selecting)
+  $("btnAddBreakfast")?.addEventListener("click", () => alert("Next step: add from library into pools."));
+  $("btnAddLunch")?.addEventListener("click", () => alert("Next step: add from library into pools."));
+  $("btnAddDinner")?.addEventListener("click", () => alert("Next step: add from library into pools."));
+  $("btnAddFromLibrary")?.addEventListener("click", () => alert("Next step: add from library into pools."));
 }
 
 function renderPlanning(){
@@ -463,13 +525,12 @@ function renderPlanning(){
   if(!p) return;
 
   $("planningTargets").innerHTML = `
-Calories: ${p.targets?.cal || "-"}<br>
-Protein: ${p.targets?.pro || "-"} g<br>
-Carbs: ${p.targets?.car || "-"} g<br>
-Fat: ${p.targets?.fat || "-"} g
+Calories: ${escapeHTML(p.targets?.cal || "-")}<br>
+Protein: ${escapeHTML(p.targets?.pro || "-")} g<br>
+Carbs: ${escapeHTML(p.targets?.car || "-")} g<br>
+Fat: ${escapeHTML(p.targets?.fat || "-")} g
   `.trim();
 
-  // For now: totals are based on IDs stored in plan (later we’ll do pools/averages)
   const totals = { cal:0, pro:0, car:0, fat:0 };
 
   ["breakfast","lunch","dinner"].forEach(cat=>{
@@ -519,9 +580,9 @@ function buildPlanText(){
    BACKUP / RESTORE
 ============================= */
 function bindBackupHandlers(){
-  $("btnBackup").addEventListener("click", () => {
+  $("btnBackup")?.addEventListener("click", () => {
     const payload = {
-      version: "v4.1",
+      version: "v4.2",
       exportedAt: new Date().toISOString(),
       profiles,
       activeProfileId,
@@ -543,7 +604,7 @@ function bindBackupHandlers(){
     URL.revokeObjectURL(url);
   });
 
-  $("fileImport").addEventListener("change", (e) => {
+  $("fileImport")?.addEventListener("change", (e) => {
     const file = e.target.files?.[0];
     if(!file) return;
 
@@ -573,13 +634,40 @@ function bindBackupHandlers(){
     };
     reader.readAsText(file);
 
-    // reset input so you can re-import same file if needed
     e.target.value = "";
   });
-   
-// Safari-safe init (works even if DOMContentLoaded already fired)
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", init);
-} else {
-  init();
 }
+
+/* =============================
+   BULLETPROOF TAB SWITCHING (Safari-safe)
+   Works even if init() fails for any reason.
+   Handles Safari Text node click targets.
+============================= */
+(function () {
+  function switchTab(tabName) {
+    document.querySelectorAll(".tab").forEach((b) => {
+      b.classList.toggle("active", b.dataset.tab === tabName);
+    });
+
+    document.querySelectorAll(".tabPanel").forEach((p) => p.classList.remove("active"));
+    const panel = document.getElementById(`tab_${tabName}`);
+    if (panel) panel.classList.add("active");
+  }
+
+  function handler(evt) {
+    const target = (evt.target && evt.target.nodeType === 1) ? evt.target : evt.target?.parentElement;
+    if (!target) return;
+
+    const btn = target.closest(".tab");
+    if (!btn) return;
+
+    const tabName = btn.dataset.tab;
+    if (!tabName) return;
+
+    switchTab(tabName);
+  }
+
+  // Capture phase to avoid weird Safari click issues
+  document.addEventListener("click", handler, true);
+  document.addEventListener("touchstart", handler, true);
+})();
