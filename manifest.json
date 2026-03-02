@@ -1,9 +1,9 @@
 {
   "name": "Meal Plan Builder",
   "short_name": "Meal Planner",
-  "start_url": "./",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0b0b0c",
   "theme_color": "#0b0b0c",
-  "icons": []
+  "orientation": "any"
 }
