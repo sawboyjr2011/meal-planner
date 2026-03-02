@@ -337,68 +337,11 @@
           <div class="hint">Not saved until you click “Save…”.</div>
           <div id="importResults" class="list mt10"></div>
         </section>
-
         <!-- RIGHT COLUMN -->
         <section class="card">
-          <!-- LOCAL FILTERS AT TOP (this is what you asked for) -->
+
+          <!-- ADD/EDIT (TOP) -->
           <div class="card inner">
-            <div class="row2">
-              <div>
-                <h2 class="mt0">Local recipe library filters</h2>
-                <div class="hint">These only affect your saved library (right side), not imports.</div>
-              </div>
-              <div class="rowBtn">
-                <button class="danger" id="btnWipeRecipes">Delete all</button>
-              </div>
-            </div>
-
-            <div class="row2 mt10">
-              <div>
-                <label>Search</label>
-                <input id="search" placeholder="name, ingredient, tag">
-              </div>
-              <div>
-                <label>Filter mode</label>
-                <select id="filterMode">
-                  <option value="hide" selected>Hide excluded</option>
-                  <option value="warn">Show but warn</option>
-                </select>
-              </div>
-            </div>
-
-            <label class="check mt10">
-              <input type="checkbox" id="localUseProfile" checked>
-              Filter local library using active profile restrictions/preferences
-            </label>
-
-            <div class="divider mt16"></div>
-
-            <h2 class="mt16">Macro filters (local)</h2>
-            <div class="row3 mt10">
-              <div><label>Protein (min)</label><input id="l_pro_min" type="number" placeholder="0"></div>
-              <div><label>Protein (max)</label><input id="l_pro_max" type="number" placeholder="999"></div>
-              <div class="alignEnd"><button id="btnApplyLocalFilters" class="primary">Apply</button></div>
-            </div>
-            <div class="row3 mt10">
-              <div><label>Carbs (min)</label><input id="l_car_min" type="number" placeholder="0"></div>
-              <div><label>Carbs (max)</label><input id="l_car_max" type="number" placeholder="999"></div>
-              <div></div>
-            </div>
-            <div class="row3 mt10">
-              <div><label>Fat (min)</label><input id="l_fat_min" type="number" placeholder="0"></div>
-              <div><label>Fat (max)</label><input id="l_fat_max" type="number" placeholder="999"></div>
-              <div></div>
-            </div>
-
-            <div class="split mt12">
-              <button id="btnClearLocalFilters">Clear local filters</button>
-            </div>
-
-            <div id="localFilterStatus" class="hint mt10"></div>
-          </div>
-
-          <!-- ADD/EDIT -->
-          <div class="card inner mt12">
             <h2 class="mt0">Add / Edit recipe</h2>
             <div class="hint">Manual recipes can be auto-calculated with USDA (if enabled).</div>
 
@@ -458,12 +401,68 @@
             <div id="recipeCalcStatus" class="hint mt10"></div>
           </div>
 
-          <!-- LOCAL LIST -->
+          <!-- LOCAL FILTERS (MIDDLE) -->
+          <div class="card inner mt12">
+            <div class="row2">
+              <div>
+                <h2 class="mt0">Local recipe library filters</h2>
+                <div class="hint">These only affect your saved library (right side), not imports.</div>
+              </div>
+              <div class="rowBtn">
+                <button class="danger" id="btnWipeRecipes">Delete all</button>
+              </div>
+            </div>
+
+            <div class="row2 mt10">
+              <div>
+                <label>Search</label>
+                <input id="search" placeholder="name, ingredient, tag">
+              </div>
+              <div>
+                <label>Filter mode</label>
+                <select id="filterMode">
+                  <option value="hide" selected>Hide excluded</option>
+                  <option value="warn">Show but warn</option>
+                </select>
+              </div>
+            </div>
+
+            <label class="check mt10">
+              <input type="checkbox" id="localUseProfile" checked>
+              Filter local library using active profile restrictions/preferences
+            </label>
+
+            <div class="divider mt16"></div>
+
+            <h2 class="mt16">Macro filters (local)</h2>
+            <div class="row3 mt10">
+              <div><label>Protein (min)</label><input id="l_pro_min" type="number" placeholder="0"></div>
+              <div><label>Protein (max)</label><input id="l_pro_max" type="number" placeholder="999"></div>
+              <div class="alignEnd"><button id="btnApplyLocalFilters" class="primary">Apply</button></div>
+            </div>
+            <div class="row3 mt10">
+              <div><label>Carbs (min)</label><input id="l_car_min" type="number" placeholder="0"></div>
+              <div><label>Carbs (max)</label><input id="l_car_max" type="number" placeholder="999"></div>
+              <div></div>
+            </div>
+            <div class="row3 mt10">
+              <div><label>Fat (min)</label><input id="l_fat_min" type="number" placeholder="0"></div>
+              <div><label>Fat (max)</label><input id="l_fat_max" type="number" placeholder="999"></div>
+              <div></div>
+            </div>
+
+            <div class="split mt12">
+              <button id="btnClearLocalFilters">Clear local filters</button>
+            </div>
+
+            <div id="localFilterStatus" class="hint mt10"></div>
+          </div>
+
+          <!-- LOCAL LIST (BOTTOM) -->
           <div class="divider mt16"></div>
           <h2 class="mt16">Recipes</h2>
           <div id="recipes" class="list mt10"></div>
         </section>
-
       </div>
     </section>
 
