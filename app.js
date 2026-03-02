@@ -1,17 +1,13 @@
-/* app.js (v5.1)
-   For: index_RECIPES_LAYOUT_FIXED.html + styles.css (v5)
-   Fixes:
-   - Tabs work (Safari-safe, event delegation)
-   Includes:
-   - Profiles (create/save/delete + summary)
-   - Planning (basic totals scaffold)
-   - Recipes:
-     * LEFT: MealDB import + import filters + import results
-     * RIGHT TOP: Local filters
-     * RIGHT MID: Add/Edit recipe
-     * RIGHT BOTTOM: Local library list
-   Notes:
-   - MealDB does not include nutrition; imported items start with zeros until USDA autofill is added later.
+/* app.js (v5.2)
+   Adds USDA FoodData Central nutrition autofill (best-effort) + keeps MealDB import working.
+   Works with:
+   - index_RECIPES_RIGHT_REORDER.html
+   - styles_UPDATED_UI.css (v5)
+   Key features added:
+   - "Auto-calc now" button calculates nutrition from ingredient lines via USDA API
+   - Auto-calc on save for manual recipes when enabled (Profiles tab checkbox) and a USDA key is present
+   - Click any local recipe in the list to load it into the Add/Edit form for editing + auto-calc
+   - Caching of USDA lookups in localStorage to reduce API calls
 */
 
 const LS = {
@@ -21,7 +17,8 @@ const LS = {
   plan: "mp_plan_v4",
   usdaKey: "mp_usda_key_v4",
   importCache: "mp_import_cache_v1",
-  filters: "mp_filters_v1"
+  filters: "mp_filters_v1",
+  usdaCache: "mp_usda_cache_v1"
 };
 
 /* =============================
@@ -55,6 +52,7 @@ function clampMinMax(minV, maxV){
 function hasAnyNutrition(r){
   return [r.cal,r.pro,r.car,r.fat].some(v => Number.isFinite(Number(v)) && Number(v) > 0);
 }
+function round1(x){ return Math.round((x + Number.EPSILON) * 10) / 10; }
 
 /* =============================
    STATE
@@ -69,6 +67,10 @@ let importResults = load(LS.importCache, []);
 let filters = load(LS.filters, {
   import: { useProfile:true, proMin:0, proMax:999, carMin:0, carMax:999, fatMin:0, fatMax:999 },
   local:  { useProfile:true, mode:"hide", q:"", proMin:0, proMax:999, carMin:0, carMax:999, fatMin:0, fatMax:999 }
+});
+
+let usdaCache = load(LS.usdaCache, {
+  // key: normalized query string -> { fdcId, nutrientsPer100g: {cal,pro,car,fat,sod,fib,sug,sat,pot}, name, ts }
 });
 
 /* =============================
@@ -112,43 +114,29 @@ if (document.readyState === "loading") {
 }
 
 /* =============================
-   TABS (FIXED)
+   TABS
 ============================= */
 function bindTabs(){
-  // event delegation is more Safari-proof
   document.addEventListener("click", (evt) => {
-    const target = (evt.target && evt.target.nodeType === 1) ? evt.target : evt.target?.parentElement;
-    if(!target) return;
-
-    const btn = target.closest(".tab");
+    const btn = evt.target?.closest?.(".tab");
     if(!btn) return;
-
     const tabName = btn.dataset.tab;
     if(!tabName) return;
-
     setActiveTab(tabName);
   }, true);
 
-  // touchstart helps iOS Safari sometimes
   document.addEventListener("touchstart", (evt) => {
-    const target = (evt.target && evt.target.nodeType === 1) ? evt.target : evt.target?.parentElement;
-    if(!target) return;
-
-    const btn = target.closest(".tab");
+    const btn = evt.target?.closest?.(".tab");
     if(!btn) return;
-
     const tabName = btn.dataset.tab;
     if(!tabName) return;
-
     setActiveTab(tabName);
   }, true);
 }
-
 function setActiveTab(tabName){
   document.querySelectorAll(".tab").forEach(b => {
     b.classList.toggle("active", b.dataset.tab === tabName);
   });
-
   document.querySelectorAll(".tabPanel").forEach(p => p.classList.remove("active"));
   const panel = document.getElementById(`tab_${tabName}`);
   if(panel) panel.classList.add("active");
@@ -170,7 +158,6 @@ function createEmptyProfile(){
     equipment: []
   };
 }
-
 function ensureProfileExists(){
   if(!profiles.length){
     const p = createEmptyProfile();
@@ -184,16 +171,13 @@ function ensureProfileExists(){
     }
   }
 }
-
 function persistProfiles(){
   save(LS.profiles, profiles);
   localStorage.setItem(LS.activeProfile, activeProfileId || "");
 }
-
 function getActiveProfile(){
   return profiles.find(p => p.id === activeProfileId) || null;
 }
-
 function renderProfileSelect(){
   const sel = $("profileSelect");
   if(!sel) return;
@@ -206,7 +190,6 @@ function renderProfileSelect(){
   });
   sel.value = activeProfileId || "";
 }
-
 function loadActiveProfileIntoForm(){
   const p = getActiveProfile();
   if(!p) return;
@@ -247,7 +230,6 @@ function loadActiveProfileIntoForm(){
   $("p_eq_slowcooker").checked = eq.has("slowcooker");
   $("p_eq_blender").checked = eq.has("blender");
 }
-
 function bindProfileHandlers(){
   $("profileSelect")?.addEventListener("change", () => {
     activeProfileId = $("profileSelect").value;
@@ -343,7 +325,6 @@ function bindProfileHandlers(){
     alert("Profile saved.");
   });
 }
-
 function renderProfileSummary(){
   const p = getActiveProfile();
   if(!p) return;
@@ -369,8 +350,12 @@ Equipment: ${escapeHTML((p.equipment || []).join(", ") || "â€”")}
 }
 
 /* =============================
-   USDA KEY (test only for now)
+   USDA KEY + SETTINGS
 ============================= */
+function isAutoFillEnabled(){
+  return !!$("autoFillOnSave")?.checked;
+}
+
 function bindUSDAHandlers(){
   $("saveUsdaKey")?.addEventListener("click", () => {
     usdaKey = $("usdaKey").value.trim();
@@ -387,9 +372,11 @@ function bindUSDAHandlers(){
       const r = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${encodeURIComponent(k)}`,{
         method:"POST",
         headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ query:"chicken", pageSize:1 })
+        body: JSON.stringify({ query:"chicken breast", pageSize:1 })
       });
       if(!r.ok) throw new Error();
+      const j = await r.json();
+      if(!j.foods?.length) throw new Error();
       $("usdaStatus").textContent = "Key works âœ…";
     }catch{
       $("usdaStatus").textContent = "Key failed âŒ";
@@ -429,7 +416,6 @@ function evaluateProfileFit(recipe, profile){
   const warn = !hasAnyNutrition(recipe);
   return { ok:true, warn, hits:[], score };
 }
-
 function passesMacroFilter(recipe, macroFilter){
   if(!hasAnyNutrition(recipe)) return true;
 
@@ -534,64 +520,47 @@ function bindFilterHandlers(){
 }
 
 /* =============================
-   RECIPES (LOCAL)
+   RECIPES (LOCAL) + USDA AUTO-CALC
 ============================= */
 function bindRecipeHandlers(){
-  $("btnSaveRecipe")?.addEventListener("click", () => {
+  $("btnSaveRecipe")?.addEventListener("click", async () => {
     const id = $("r_id").value || uid();
-    const recipe = {
-      id,
-      source: "manual",
-      name: $("r_name").value.trim(),
-      category: $("r_category").value,
-      area: "",
-      serv: num($("r_serv").value) || 1,
-      cal: num($("r_cal").value),
-      pro: num($("r_pro").value),
-      car: num($("r_car").value),
-      fat: num($("r_fat").value),
-      sod: num($("r_sod").value),
-      fib: num($("r_fib").value),
-      sug: num($("r_sug").value),
-      sat: num($("r_sat").value),
-      pot: num($("r_pot").value),
-      ingredients: ($("r_ing").value || "").split("\n").map(s=>s.trim()).filter(Boolean),
-      steps: $("r_steps").value || "",
-      tags: ($("r_tags").value || "").split(",").map(s=>norm(s)).filter(Boolean)
-    };
+
+    const recipe = buildRecipeFromForm(id);
 
     if(!recipe.name){
       alert("Recipe name is required.");
       return;
     }
 
-    const idx = recipes.findIndex(r=>r.id===id);
-    if(idx>=0) recipes[idx]=recipe;
-    else recipes.unshift(recipe);
+    // Auto-calc on save (best-effort) if enabled and we have a key and we have ingredients.
+    // Only auto-fill if user hasn't entered anything meaningful yet (all zeros for major macros)
+    const shouldAuto =
+      isAutoFillEnabled() &&
+      (localStorage.getItem(LS.usdaKey) || "").trim() &&
+      (recipe.ingredients || []).length &&
+      (num(recipe.cal) === 0 && num(recipe.pro) === 0 && num(recipe.car) === 0 && num(recipe.fat) === 0);
 
-    save(LS.recipes, recipes);
-    renderRecipes();
-    renderPlanning();
+    if(shouldAuto){
+      $("recipeCalcStatus").textContent = "Auto-calculating nutritionâ€¦";
+      try{
+        const est = await estimateNutritionFromUSDA(recipe.ingredients, recipe.serv || 1);
+        applyNutritionToForm(est);
+        // update recipe object with estimated values
+        Object.assign(recipe, est);
+        $("recipeCalcStatus").textContent = `Auto-calc complete (best-effort). Lines used: ${est._usedLines}/${est._totalLines}.`;
+      }catch(e){
+        $("recipeCalcStatus").textContent = "Auto-calc failed. You can still enter nutrition manually.";
+      }
+    }
+
+    upsertRecipe(recipe);
 
     $("r_id").value = "";
     alert("Recipe saved.");
   });
 
-  $("btnResetRecipe")?.addEventListener("click", () => {
-    $("r_id").value = "";
-    $("r_name").value = "";
-    $("r_category").value = "breakfast";
-    $("r_serv").value = 1;
-
-    ["r_cal","r_pro","r_car","r_fat","r_sod","r_fib","r_sug","r_sat","r_pot"].forEach(id=>{
-      const el = $(id); if(el) el.value = 0;
-    });
-
-    $("r_ing").value = "";
-    $("r_steps").value = "";
-    $("r_tags").value = "";
-    $("recipeCalcStatus").textContent = "";
-  });
+  $("btnResetRecipe")?.addEventListener("click", () => resetRecipeForm());
 
   $("btnWipeRecipes")?.addEventListener("click", () => {
     if(!confirm("Delete ALL recipes?")) return;
@@ -601,11 +570,118 @@ function bindRecipeHandlers(){
     renderPlanning();
   });
 
-  $("btnAutoCalcRecipe")?.addEventListener("click", () => {
-    alert("Next step: USDA auto-fill for manual + imported recipes.");
+  $("btnAutoCalcRecipe")?.addEventListener("click", async () => {
+    const k = (localStorage.getItem(LS.usdaKey) || "").trim();
+    if(!k){
+      alert("Add and Save your USDA API key in the Profiles tab first.");
+      return;
+    }
+    const ingredients = ($("r_ing").value || "").split("\n").map(s=>s.trim()).filter(Boolean);
+    if(!ingredients.length){
+      alert("Add ingredient lines first (ideally with grams, like: 200 g chicken breast).");
+      return;
+    }
+    $("recipeCalcStatus").textContent = "Auto-calculating nutritionâ€¦";
+    try{
+      const serv = num($("r_serv").value) || 1;
+      const est = await estimateNutritionFromUSDA(ingredients, serv);
+      applyNutritionToForm(est);
+      $("recipeCalcStatus").textContent = `Auto-calc complete (best-effort). Lines used: ${est._usedLines}/${est._totalLines}.`;
+    }catch(e){
+      $("recipeCalcStatus").textContent = "Auto-calc failed. Try simpler ingredient lines or grams.";
+    }
   });
 }
 
+function buildRecipeFromForm(id){
+  return {
+    id,
+    source: $("r_id").value ? (recipes.find(r=>r.id===id)?.source || "manual") : "manual",
+    name: $("r_name").value.trim(),
+    category: $("r_category").value,
+    area: recipes.find(r=>r.id===id)?.area || "",
+    serv: num($("r_serv").value) || 1,
+    cal: num($("r_cal").value),
+    pro: num($("r_pro").value),
+    car: num($("r_car").value),
+    fat: num($("r_fat").value),
+    sod: num($("r_sod").value),
+    fib: num($("r_fib").value),
+    sug: num($("r_sug").value),
+    sat: num($("r_sat").value),
+    pot: num($("r_pot").value),
+    ingredients: ($("r_ing").value || "").split("\n").map(s=>s.trim()).filter(Boolean),
+    steps: $("r_steps").value || "",
+    tags: ($("r_tags").value || "").split(",").map(s=>norm(s)).filter(Boolean)
+  };
+}
+
+function applyNutritionToForm(est){
+  // est is per-serving nutrition
+  $("r_cal").value = Math.round(num(est.cal));
+  $("r_pro").value = round1(num(est.pro));
+  $("r_car").value = round1(num(est.car));
+  $("r_fat").value = round1(num(est.fat));
+  $("r_sod").value = Math.round(num(est.sod));
+  $("r_fib").value = round1(num(est.fib));
+  $("r_sug").value = round1(num(est.sug));
+  $("r_sat").value = round1(num(est.sat));
+  $("r_pot").value = Math.round(num(est.pot));
+}
+
+function resetRecipeForm(){
+  $("r_id").value = "";
+  $("r_name").value = "";
+  $("r_category").value = "breakfast";
+  $("r_serv").value = 1;
+
+  ["r_cal","r_pro","r_car","r_fat","r_sod","r_fib","r_sug","r_sat","r_pot"].forEach(id=>{
+    const el = $(id); if(el) el.value = 0;
+  });
+
+  $("r_ing").value = "";
+  $("r_steps").value = "";
+  $("r_tags").value = "";
+  $("recipeCalcStatus").textContent = "";
+}
+
+function upsertRecipe(recipe){
+  const idx = recipes.findIndex(r=>r.id===recipe.id);
+  if(idx>=0) recipes[idx]=recipe;
+  else recipes.unshift(recipe);
+
+  save(LS.recipes, recipes);
+  renderRecipes();
+  renderPlanning();
+}
+
+/* Click to load into edit form */
+function loadRecipeIntoForm(r){
+  $("r_id").value = r.id;
+  $("r_name").value = r.name || "";
+  $("r_category").value = r.category || "breakfast";
+  $("r_serv").value = r.serv || 1;
+
+  $("r_cal").value = num(r.cal);
+  $("r_pro").value = num(r.pro);
+  $("r_car").value = num(r.car);
+  $("r_fat").value = num(r.fat);
+  $("r_sod").value = num(r.sod);
+  $("r_fib").value = num(r.fib);
+  $("r_sug").value = num(r.sug);
+  $("r_sat").value = num(r.sat);
+  $("r_pot").value = num(r.pot);
+
+  $("r_ing").value = (r.ingredients || []).join("\n");
+  $("r_steps").value = r.steps || "";
+  $("r_tags").value = (r.tags || []).join(", ");
+
+  $("recipeCalcStatus").textContent = r.source === "mealdb"
+    ? "Imported from MealDB. Use Auto-calc now to estimate nutrition."
+    : "";
+}
+
+/* Render local list + add click handler */
 function renderRecipes(){
   const list = $("recipes");
   if(!list) return;
@@ -661,6 +737,8 @@ function renderRecipes(){
   rendered.forEach(({r, fit})=>{
     const div = document.createElement("div");
     div.className = "item";
+    div.style.cursor = "pointer";
+    div.title = "Click to edit";
 
     const warnText = fit.warn ? ` <span class="warn">(check profile / missing nutrition)</span>` : "";
     div.innerHTML = `
@@ -673,6 +751,13 @@ function renderRecipes(){
       </div>
       <div class="hint mt8">Source: ${escapeHTML(r.source || "manual")} â€¢ Tags: ${escapeHTML((r.tags||[]).join(", ") || "â€”")}</div>
     `;
+
+    div.addEventListener("click", () => {
+      loadRecipeIntoForm(r);
+      // ensure user sees the form at top (right column)
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+
     list.appendChild(div);
   });
 
@@ -693,7 +778,6 @@ function updateLocalFilterStatus(matchCount, totalCount){
   if((filters.local.q || "").trim()) parts.push("Search: ON");
   el.textContent = parts.join(" â€¢ ");
 }
-
 function hasLocalMacrosSet(){
   const f = filters.local;
   return (
@@ -861,7 +945,6 @@ function renderImportResults(){
     const div = document.createElement("div");
     div.className = "item";
     const warnText = fit.warn ? ` <span class="warn">(missing nutrition)</span>` : "";
-
     div.innerHTML = `
       <h3>${escapeHTML(r.name)}${warnText}</h3>
       <div class="hint">Area: ${escapeHTML(r.area || "-")} â€¢ Category: ${escapeHTML(r.category || "-")}</div>
@@ -885,6 +968,163 @@ function saveImportsToLibrary(importItems){
   recipes = Array.from(existing.values());
   save(LS.recipes, recipes);
   renderRecipes();
+}
+
+/* =============================
+   USDA: Nutrition estimation (best effort)
+   Expectations:
+   - Best results when ingredient lines include grams (e.g. "200 g chicken breast")
+   - If no grams/oz/ml are detectable, we assume 100g (warn via usedLines count)
+============================= */
+function parseIngredientLine(line){
+  // returns { grams, query }
+  const s = line.trim();
+
+  // Normalize common patterns: "200g", "200 g", "2 oz", "1 lb", "1.5kg"
+  const re = /^(\d+(?:\.\d+)?)\s*(g|gram|grams|kg|kgs|oz|ounce|ounces|lb|lbs|pound|pounds|ml|l)\b/i;
+  const m = s.match(re);
+
+  let grams = null;
+  let rest = s;
+
+  if(m){
+    const qty = parseFloat(m[1]);
+    const unit = m[2].toLowerCase();
+    rest = s.slice(m[0].length).trim();
+
+    if(unit === "g" || unit === "gram" || unit === "grams") grams = qty;
+    else if(unit === "kg" || unit === "kgs") grams = qty * 1000;
+    else if(unit === "oz" || unit === "ounce" || unit === "ounces") grams = qty * 28.349523125;
+    else if(unit === "lb" || unit === "lbs" || unit === "pound" || unit === "pounds") grams = qty * 453.59237;
+    else if(unit === "ml") grams = qty; // rough for water-like items
+    else if(unit === "l") grams = qty * 1000;
+  }
+
+  // If rest begins with "of" or "-", strip
+  rest = rest.replace(/^of\s+/i, "").replace(/^[\-â€“]\s*/,"").trim();
+  if(!rest) rest = s; // fallback
+
+  // Remove trailing notes like "(cooked)" for query? keep but soften
+  const query = rest.replace(/[()]/g," ").replace(/\s+/g," ").trim();
+
+  return { grams, query };
+}
+
+function cacheGet(queryKey){
+  const k = norm(queryKey);
+  const hit = usdaCache[k];
+  if(!hit) return null;
+  return hit;
+}
+function cacheSet(queryKey, value){
+  const k = norm(queryKey);
+  usdaCache[k] = { ...value, ts: Date.now() };
+  save(LS.usdaCache, usdaCache);
+}
+
+async function usdaSearchFood(query){
+  const k = (localStorage.getItem(LS.usdaKey) || "").trim();
+  if(!k) throw new Error("missing key");
+
+  // cache check
+  const cached = cacheGet(query);
+  if(cached?.nutrientsPer100g) return cached;
+
+  const res = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${encodeURIComponent(k)}`, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      query,
+      pageSize: 5,
+      // "Branded" can be noisy; Foundation/SR tend to be cleaner.
+      // Leaving default gives broad coverage.
+    })
+  });
+  if(!res.ok) throw new Error("search failed");
+  const json = await res.json();
+  const food = json.foods?.[0];
+  if(!food?.fdcId) throw new Error("no results");
+
+  // Try to use nutrients from search results if present
+  const n = extractNutrientsFromFoodNutrients(food.foodNutrients || []);
+  const packed = {
+    fdcId: food.fdcId,
+    name: food.description || query,
+    nutrientsPer100g: n
+  };
+  cacheSet(query, packed);
+  return packed;
+}
+
+function extractNutrientsFromFoodNutrients(foodNutrients){
+  // USDA nutrient ids (common):
+  // 1008 Energy (kcal), 1003 Protein, 1005 Carbohydrate, 1004 Total lipid (fat)
+  // 1093 Sodium (mg), 1079 Fiber, 2000 Sugars, 1258 Saturated fat, 1092 Potassium
+  const out = { cal:0, pro:0, car:0, fat:0, sod:0, fib:0, sug:0, sat:0, pot:0 };
+  for(const fn of foodNutrients){
+    const id = fn.nutrientId || fn.nutrient?.id;
+    const val = Number(fn.value ?? fn.amount ?? 0) || 0;
+    if(id === 1008) out.cal = val;
+    else if(id === 1003) out.pro = val;
+    else if(id === 1005) out.car = val;
+    else if(id === 1004) out.fat = val;
+    else if(id === 1093) out.sod = val;
+    else if(id === 1079) out.fib = val;
+    else if(id === 2000) out.sug = val;
+    else if(id === 1258) out.sat = val;
+    else if(id === 1092) out.pot = val;
+  }
+  return out; // per 100g for many foods; this is "best effort"
+}
+
+async function estimateNutritionFromUSDA(ingredientLines, servings){
+  const used = { totalLines: ingredientLines.length, usedLines:0 };
+  const totals = { cal:0, pro:0, car:0, fat:0, sod:0, fib:0, sug:0, sat:0, pot:0 };
+
+  // Rate limit friendly: sequential requests
+  for(const line of ingredientLines){
+    const { grams, query } = parseIngredientLine(line);
+    if(!query) continue;
+
+    // Best-effort grams: if unknown, assume 100g
+    const g = Number.isFinite(grams) && grams > 0 ? grams : 100;
+    const effectiveUsed = Number.isFinite(grams) && grams > 0; // counts as "good" line
+    if(effectiveUsed) used.usedLines += 1;
+
+    // Try search + cached nutrients
+    const food = await usdaSearchFood(query);
+    const n100 = food.nutrientsPer100g || { cal:0, pro:0, car:0, fat:0, sod:0, fib:0, sug:0, sat:0, pot:0 };
+
+    const factor = g / 100.0;
+
+    totals.cal += num(n100.cal) * factor;
+    totals.pro += num(n100.pro) * factor;
+    totals.car += num(n100.car) * factor;
+    totals.fat += num(n100.fat) * factor;
+    totals.sod += num(n100.sod) * factor;
+    totals.fib += num(n100.fib) * factor;
+    totals.sug += num(n100.sug) * factor;
+    totals.sat += num(n100.sat) * factor;
+    totals.pot += num(n100.pot) * factor;
+  }
+
+  const serv = Math.max(1, num(servings) || 1);
+
+  const per = {
+    cal: Math.round(totals.cal / serv),
+    pro: round1(totals.pro / serv),
+    car: round1(totals.car / serv),
+    fat: round1(totals.fat / serv),
+    sod: Math.round(totals.sod / serv),
+    fib: round1(totals.fib / serv),
+    sug: round1(totals.sug / serv),
+    sat: round1(totals.sat / serv),
+    pot: Math.round(totals.pot / serv),
+    _totalLines: used.totalLines,
+    _usedLines: used.usedLines
+  };
+
+  return per;
 }
 
 /* =============================
@@ -974,14 +1214,15 @@ function buildPlanText(){
 function bindBackupHandlers(){
   $("btnBackup")?.addEventListener("click", () => {
     const payload = {
-      version: "v5.1",
+      version: "v5.2",
       exportedAt: new Date().toISOString(),
       profiles,
       activeProfileId,
       recipes,
       plan,
       importResults,
-      filters
+      filters,
+      usdaCacheKeys: Object.keys(usdaCache).length
     };
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type:"application/json" });
